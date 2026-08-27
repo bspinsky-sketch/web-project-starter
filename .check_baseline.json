@@ -1,0 +1,129 @@
+{
+  "app/blueprints/project_name/__init__.py": {
+    "lines": 7,
+    "functions": 0,
+    "classes": 0,
+    "routes": 0
+  },
+  "app/blueprints/project_name/calculator.py": {
+    "lines": 130,
+    "functions": 5,
+    "classes": 0,
+    "routes": 0
+  },
+  "app/blueprints/project_name/data_capture.py": {
+    "lines": 195,
+    "functions": 6,
+    "classes": 0,
+    "routes": 0
+  },
+  "app/blueprints/project_name/emailer.py": {
+    "lines": 145,
+    "functions": 3,
+    "classes": 0,
+    "routes": 0
+  },
+  "app/blueprints/project_name/report.py": {
+    "lines": 80,
+    "functions": 3,
+    "classes": 0,
+    "routes": 0
+  },
+  "app/blueprints/project_name/routes.py": {
+    "lines": 170,
+    "functions": 11,
+    "classes": 0,
+    "routes": 11
+  },
+  "app/templates/project_name/assumptions.html": {
+    "lines": 6,
+    "jinja_for": 0,
+    "jinja_endfor": 0,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 2,
+    "jinja_endblock": 2,
+    "css_classes": 0,
+    "css_rules": 8,
+    "css_class_count": 0,
+    "js_functions": 0
+  },
+  "app/templates/project_name/base.html": {
+    "lines": 242,
+    "jinja_for": 1,
+    "jinja_endfor": 1,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 6,
+    "jinja_endblock": 6,
+    "css_classes": 45,
+    "css_rules": 93,
+    "css_class_count": 81,
+    "js_functions": 1
+  },
+  "app/templates/project_name/calculators.html": {
+    "lines": 6,
+    "jinja_for": 0,
+    "jinja_endfor": 0,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 2,
+    "jinja_endblock": 2,
+    "css_classes": 0,
+    "css_rules": 8,
+    "css_class_count": 0,
+    "js_functions": 0
+  },
+  "app/templates/project_name/modal_base.html": {
+    "lines": 107,
+    "jinja_for": 0,
+    "jinja_endfor": 0,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 6,
+    "jinja_endblock": 6,
+    "css_classes": 10,
+    "css_rules": 44,
+    "css_class_count": 23,
+    "js_functions": 1
+  },
+  "app/templates/project_name/step1_profile.html": {
+    "lines": 6,
+    "jinja_for": 0,
+    "jinja_endfor": 0,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 2,
+    "jinja_endblock": 2,
+    "css_classes": 0,
+    "css_rules": 8,
+    "css_class_count": 0,
+    "js_functions": 0
+  },
+  "app/templates/project_name/step2_challenges.html": {
+    "lines": 6,
+    "jinja_for": 0,
+    "jinja_endfor": 0,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 2,
+    "jinja_endblock": 2,
+    "css_classes": 0,
+    "css_rules": 8,
+    "css_class_count": 0,
+    "js_functions": 0
+  },
+  "app/templates/project_name/summary.html": {
+    "lines": 6,
+    "jinja_for": 0,
+    "jinja_endfor": 0,
+    "jinja_if": 0,
+    "jinja_endif": 0,
+    "jinja_block": 2,
+    "jinja_endblock": 2,
+    "css_classes": 0,
+    "css_rules": 8,
+    "css_class_count": 0,
+    "js_functions": 0
+  }
+}

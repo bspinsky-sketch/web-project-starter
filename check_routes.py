@@ -1,17 +1,30 @@
 """
-check_routes.py -- Route smoke test for ITSMweb.
+check_routes.py -- Generic route smoke test.
 
-Uses Flask's built-in test client (no running server needed).
-Seeds a realistic session, hits every page route, and checks:
-  1. HTTP 200 (not 302, not 500)
-  2. Expected content substrings are present in the response body
+Uses Flask's built-in test client (no running server needed). Discovers
+every GET-capable route from the app's own url_map (no per-project route
+list to maintain) and checks that none of them raise an unhandled server
+error. A redirect (e.g. a session-gated route bouncing to a start page
+with no session set) is expected and not a failure -- only a 5xx response
+counts as broken.
 
-Also spot-checks run_calculation() output keys.
+This generic version deliberately does NOT assert project-specific page
+content (exact headings, form field names, calculation results) -- that
+requires knowing the project's actual pages and session model, which this
+starter can't know in advance. Two extension points below let a project
+layer that on once it exists, without losing the generic baseline check:
+
+  CONTENT_ASSERTIONS -- map a route to substrings its rendered body must
+    contain (checked with an empty/fresh session).
+  SEEDED_SESSION / SEEDED_ASSERTIONS -- a session dict to seed before
+    testing SEEDED_ASSERTIONS' routes, for pages that only render with
+    session state already present (e.g. a Results page).
+
+Both are empty by default -- fill them in once your project's session
+model and page content are settled (WBS.md Phase 3/4) for stronger
+coverage than the generic 5xx-only check.
 
 Exit 0 = all checks pass; 1 = any failure.
-
-NOTE: GET / clears the session (fresh-session route), so it is tested
-with a separate client from the seeded-session routes.
 """
 
 import sys
@@ -25,76 +38,54 @@ except Exception as e:
     print(f'FAIL  Could not import app: {e}')
     sys.exit(1)
 
-try:
-    from app.itsmbvf.calculator import run_calculation, read_defaults
-except Exception as e:
-    print(f'FAIL  Could not import calculator: {e}')
-    sys.exit(1)
-
 # ---------------------------------------------------------------------------
-# Test session data -- keys must match what routes.py stores exactly
+# Optional per-project extension points -- see module docstring. Empty by
+# default; the generic discovery-based check below works with no changes.
 # ---------------------------------------------------------------------------
-PROFILE = {
-    'company_name':     'Acme Corp',
-    'revenue_millions': 500.0,
-    'employees':        2000,
-    'it_headcount':     74,
+CONTENT_ASSERTIONS = {
+    # '/profile': ['company', 'industry'],
+}
+SEEDED_SESSION = {
+    # 'profile': {...}, 'results': {...},
+}
+SEEDED_ASSERTIONS = {
+    # '/results': ['your score'],
 }
 
-PRIORITIES = {
-    'ch1': 'High', 'ch2': 'Medium', 'ch3': 'Low',
-    'ch4': 'None', 'ch5': 'High',   'ch6': 'Medium', 'ch7': 'Low',
-}
 
-try:
-    defs = read_defaults()
-    ASSUMPTION_DEFAULTS = defs.get('assumptions', {})
-    INVESTMENT_DEFAULTS = defs.get('investment', {})
-except Exception as e:
-    print(f'WARN  read_defaults() failed ({e}); using empty dicts')
-    ASSUMPTION_DEFAULTS = {}
-    INVESTMENT_DEFAULTS = {}
-
-try:
-    KPIS = run_calculation(PROFILE, PRIORITIES)
-except Exception as e:
-    print(f'WARN  run_calculation() raised an exception: {e}')
-    print('WARN  Workbook may be unavailable in sandbox; route checks will proceed with empty KPIs')
-    KPIS = {}
-
-# Routes that need a pre-seeded session (exclude / -- it clears the session)
-SEEDED_ROUTES = [
-    ('/challenges',  ['high ticket volume', 'view benefits']),
-    ('/assumptions', ['assumptions', 'save']),
-    ('/summary',     ['roi', 'payback', 'download']),
-    ('/calculators', ['benefit', 'benefit calculators']),
-]
-
-# Routes that work on an empty session (tested separately)
-FRESH_ROUTES = [
-    ('/',            ['company name', 'annual revenue', 'employees']),
-]
-
-# KPI keys that must be present in run_calculation() output
-REQUIRED_KPI_KEYS = ['roi', 'payback', 'irr', 'npv', 'benefit_3y',
-                     'benefit_ann_avg', 'codn_mo']
+def discover_get_routes(app):
+    routes = []
+    for rule in app.url_map.iter_rules():
+        if 'GET' not in rule.methods:
+            continue
+        if rule.rule.startswith('/static'):
+            continue
+        if '<' in rule.rule:
+            continue  # skip routes needing a URL parameter -- can't smoke-test generically
+        routes.append(rule.rule)
+    return sorted(set(routes))
 
 
-def check_route(client, route, expected, fail_list):
+def check_route(client, route, expected, fail_list, allow_redirect=True):
     try:
         resp = client.get(route)
-        if resp.status_code != 200:
-            loc = resp.headers.get('Location', '')
-            print(f'  FAIL  GET {route} -- status {resp.status_code} -> {loc}')
+        if resp.status_code >= 500:
+            print(f'  FAIL  GET {route} -- server error {resp.status_code}')
             fail_list.append(route)
             return
-        body = resp.data.decode('utf-8', errors='replace').lower()
-        missing = [s for s in expected if s not in body]
-        if missing:
-            print(f'  FAIL  GET {route} -- expected strings missing: {missing}')
+        if resp.status_code not in (200, 301, 302) or (resp.status_code != 200 and not allow_redirect):
+            print(f'  FAIL  GET {route} -- unexpected status {resp.status_code}')
             fail_list.append(route)
-        else:
-            print(f'  OK    GET {route}')
+            return
+        if resp.status_code == 200 and expected:
+            body = resp.data.decode('utf-8', errors='replace').lower()
+            missing = [s for s in expected if s.lower() not in body]
+            if missing:
+                print(f'  FAIL  GET {route} -- expected strings missing: {missing}')
+                fail_list.append(route)
+                return
+        loc = f' -> {resp.headers.get("Location", "")}' if resp.status_code in (301, 302) else ''
+        print(f'  OK    GET {route}  ({resp.status_code}){loc}')
     except Exception as e:
         print(f'  FAIL  GET {route} -- exception: {e}')
         fail_list.append(route)
@@ -102,54 +93,38 @@ def check_route(client, route, expected, fail_list):
 
 def main():
     app = create_app()
-    app.config['TESTING']          = True
-    app.config['WTF_CSRF_ENABLED'] = False
+    app.config['TESTING'] = True
 
     print('Route smoke test')
     failures = []
 
-    # -- KPI key check (skip when workbook unavailable -- KPIS will be empty)
-    if not KPIS:
-        print(f'  WARN  run_calculation() skipped (workbook unavailable in sandbox)')
-    else:
-        missing_keys = [k for k in REQUIRED_KPI_KEYS if k not in KPIS]
-        if missing_keys:
-            print(f'  FAIL  run_calculation() missing KPI keys: {missing_keys}')
-            failures.append('kpi_keys')
-        else:
-            print(f'  OK    run_calculation() -- all required KPI keys present')
+    routes = discover_get_routes(app)
+    if not routes:
+        print('  WARN  No GET routes discovered (no blueprint registered yet?)')
 
-        blank = {'$0', '0', '0.0 months', 'n/a', None, 0}
-        zero_keys = [k for k in REQUIRED_KPI_KEYS
-                     if str(KPIS.get(k, '')).lower() in {str(x).lower() for x in blank}
-                     or KPIS.get(k) == 0]
-        if zero_keys:
-            print(f'  WARN  run_calculation() returned blank/zero for: {zero_keys}')
-
-    # -- Test routes that need a seeded session (one client, session seeded once)
+    # -- Generic pass: every discovered route, fresh session, 5xx = fail,
+    #    plus any CONTENT_ASSERTIONS the project has filled in.
     with app.test_client() as client:
-        with client.session_transaction() as sess:
-            sess['profile']             = PROFILE
-            sess['priorities']          = PRIORITIES
-            sess['assumptions']         = ASSUMPTION_DEFAULTS
-            sess['investment']          = INVESTMENT_DEFAULTS
-            sess['kpis']                = KPIS
-            sess['assumption_defaults'] = ASSUMPTION_DEFAULTS
-            sess['investment_defaults'] = INVESTMENT_DEFAULTS
-        for route, expected in SEEDED_ROUTES:
-            check_route(client, route, expected, failures)
+        for route in routes:
+            if route in SEEDED_ASSERTIONS:
+                continue  # handled in the seeded pass below
+            check_route(client, route, CONTENT_ASSERTIONS.get(route), failures)
 
-    # -- Test fresh-session routes (separate client so session.clear() doesn't matter)
-    with app.test_client() as client:
-        for route, expected in FRESH_ROUTES:
-            check_route(client, route, expected, failures)
+    # -- Seeded pass: only runs if the project has filled in SEEDED_SESSION
+    #    and SEEDED_ASSERTIONS.
+    if SEEDED_ASSERTIONS:
+        with app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess.update(SEEDED_SESSION)
+            for route, expected in SEEDED_ASSERTIONS.items():
+                check_route(client, route, expected, failures, allow_redirect=False)
 
     print()
     if failures:
         print(f'RESULT: FAIL -- {len(failures)} check(s) did not pass')
         sys.exit(1)
     else:
-        print('RESULT: PASS -- all routes and KPI keys verified')
+        print(f'RESULT: PASS -- {len(routes)} route(s) smoke-tested clean')
         sys.exit(0)
 
 
